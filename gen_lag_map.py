@@ -1,12 +1,10 @@
 from __future__ import division
 import numpy as np
-import statsmodels.api as sm
-import matplotlib.pyplot as plt
-import pandas as pd
 import nibabel as nib
 from scipy import signal
-from nilearn import image, plotting, masking
+from nilearn import image, masking
 import sys
+import os
 
 def get_numerator(signal_a, signal_b, lag):
     """
@@ -25,7 +23,7 @@ def get_numerator(signal_a, signal_b, lag):
     -------
     array_like (1D)
         Element-wise product of matching time points in the lagged signals.
-    """ 
+    """
     if lag == 0:
         numerator = np.multiply(signal_a, signal_b)
     # If lag is positive, shift signal_b forwards relative to signal_a.
@@ -135,7 +133,7 @@ def gen_lag_map(epi_img, brain_mask_img, gm_mask_img, lags):
         vox_xcorr = sliding_xcorr(signal_a, signal_b, lags)
         xcorr_maxima = signal.argrelmax(np.array(vox_xcorr), order=1)[0]
         if len(xcorr_maxima) == 0:
-            interp_max = np.argmax(vox_xcorr)
+            interp_max = np.argmax(vox_xcorr) - lag_index_correction
         elif len(xcorr_maxima) == 1:
             interp_max = parabolic(vox_xcorr, xcorr_maxima[0])[0]
             interp_max = interp_max - lag_index_correction
@@ -151,7 +149,9 @@ epi = sys.argv[1]
 brain_mask = sys.argv[2]
 gm_mask = sys.argv[3]
 max_lag = int(sys.argv[4])
-out_prefix = sys.argv[5]
+out_dir = sys.argv[5]
+out_prefix = sys.argv[6]
+smooth_kernel = sys.argv[7]
 
 lags = range(-max_lag, max_lag+1)
 
@@ -169,4 +169,10 @@ lag_map_data = gen_lag_map(epi_data_resampled, brain_mask_data, gm_mask_data, la
 
 lag_map_image = masking.unmask(lag_map_data, brain_mask_img)
 
-nib.save(lag_map_image, '/home/despo/dlurie/Projects/lag_maps/test_data/megarest/sub101/{}_lag_map.nii.gz'.format(out_prefix))
+lag_map_image_smoothed = image.smooth_img(lag_map_image, float(smooth_kernel))
+
+nib.save(lag_map_image, os.path.join(out_dir, out_prefix+'_lag{}.nii.gz'.format(str(max_lag))))
+nib.save(lag_map_image_smoothed, os.path.join(out_dir, out_prefix+'_lag{}_smoothed{}.nii.gz'.format(str(max_lag),smooth_kernel)))
+
+
+
